@@ -1,0 +1,233 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.metrics import classification_report, confusion_matrix
+
+
+from google.colab import drive
+import os
+
+# 1. Connexion au Drive
+drive.mount('/content/drive')
+
+# 2. Décompression (Silencieuse et Rapide)
+!unzip -q -o "/content/drive/MyDrive/Projet_CNN/Dataset.zip" -d "/content/dataset"
+
+# 3. Vérification immédiate
+print(f"✅ Terminé ! Dossiers prêts : {os.listdir('/content/dataset/Dataset/Training')}")
+
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+# --- Chemins des dossiers ---
+train_dir = '/content/dataset/Dataset/Training'
+test_dir  = '/content/dataset/Dataset/Testing'
+
+# --- Paramètres ---
+IMG_WIDTH, IMG_HEIGHT = 224, 224 # MobileNetV2 fonctionne mieux avec 224x224
+BATCH_SIZE = 32 # on envoie 32 images à la fois au modèle pour l’entraînement.
+
+# --- Générateur pour l'entraînement (AVEC Data Augmentation) ---
+
+train_datagen = ImageDataGenerator(
+    rescale=1./255,        # convertit les valeurs des pixels (0–255) en 0–1 (!!!!!!! FILTRE ????)
+    rotation_range=20,     # Rotation
+    width_shift_range=0.1, # Décalage largeur
+    height_shift_range=0.1,# Décalage hauteur
+    shear_range=0.1,       # Cisaillement
+    zoom_range=0.1,        # Zoom
+    horizontal_flip=True,  # Miroir
+    fill_mode='nearest',   # Gestion des bords
+    # ce sont des transformations aléatoires sur les images, pour créer des variantes.
+    validation_split=0.2   # on réserve 20% des images d’entraînement pour valider le modèle pendant l’entraînement
+)
+
+# --- Générateur pour le test (SANS Data Augmentation) ---
+# On ne modifie jamais les images de test, on les normalise juste.
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+# --- 1. Chargement des images d'entraînement (80%) ---
+print("--- Chargement Entraînement ---")
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=(IMG_WIDTH, IMG_HEIGHT), # redimensionnement
+    batch_size=BATCH_SIZE, # normalisation
+    class_mode='binary', # classification binaire (tumeur / sain)
+    subset='training'
+)
+
+# --- 2. Chargement des images de validation (20%) ---
+print("\n--- Chargement Validation ---")
+validation_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=(IMG_WIDTH, IMG_HEIGHT),
+    batch_size=BATCH_SIZE,
+    class_mode='binary',
+    subset='validation'
+)
+
+# --- 3. Chargement des images de test (Dossier Testing) ---
+# Note : Si le dossier Testing n'existe pas dans ton zip, cette partie plantera.
+# Si tu n'as pas de dossier Testing, tu peux ignorer ce bloc.
+if os.path.exists(test_dir):
+    print("\n--- Chargement Test ---")
+    test_generator = test_datagen.flow_from_directory(
+        test_dir,
+        target_size=(IMG_WIDTH, IMG_HEIGHT),
+        batch_size=BATCH_SIZE,
+        class_mode='binary',
+        shuffle=False # Important pour la matrice de confusion à la fin
+    )
+else:
+    print(f"\n⚠️ Attention : Le dossier {test_dir} n'existe pas.")
+
+
+import matplotlib.pyplot as plt
+
+# 1. On demande au générateur un lot d'images (batch)
+# La fonction next() déclenche la génération et l'augmentation aléatoire
+# tu demandes au générateur “donne-moi un lot d’images préparées pour le CNN”.
+# Le générateur applique les transformations aléatoires pour que ton modèle voie des variantes différentes à chaque itération.
+images_augmentees, labels = next(train_generator)
+
+# 2. Créer une figure pour afficher les 5 premières images du lot
+plt.figure(figsize=(20, 10)) # largeur 20 unités, hauteur 10 unités
+
+print("Exemples d'images générées (avec déformations aléatoires) :")
+
+for i in range(5):
+    ax = plt.subplot(1, 5, i + 1) # Crée une grille 1 ligne × 5 colonnes et place chaque image dans une cellule.
+    plt.imshow(images_augmentees[i])
+
+    # On affiche le label (0 = Pas de tumeur, 1 = Tumeur)
+    status = "Tumeur" if labels[i] == 1 else "Sain" # affiche le label de l’image
+    plt.title(status)
+    plt.axis("off")
+
+plt.show()
+
+
+
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout, Input
+from tensorflow.keras.models import Model
+
+print("\n--- Construction du modèle MobileNetV2 ---")
+
+# A. Charger la base MobileNetV2 (Le "Cerveau" pré-entraîné)
+base_model = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3),
+                         include_top=False,
+                         weights='imagenet')
+
+# B. "Geler" le modèle de base (Freezing)
+base_model.trainable = False
+
+# C. Ajouter notre tête personnalisée
+x = base_model.output
+x = GlobalAveragePooling2D()(x) # Plus moderne que Flatten
+x = Dropout(0.2)(x)             # Évite le surapprentissage
+predictions = Dense(1, activation='sigmoid')(x) # Sortie binaire
+
+# D. Assembler le tout
+model = Model(inputs=base_model.input, outputs=predictions)
+
+# E. Compiler
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+print("Modèle MobileNet chargé avec succès !")
+model.summary()
+
+
+
+# 5. VISUALISATION DES RÉSULTATS
+
+# --- A. Courbes d'apprentissage ---
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+epochs_range = range(len(acc))
+
+plt.figure(figsize=(15, 6))
+plt.subplot(1, 2, 1)
+plt.plot(epochs_range, acc, label='Train Accuracy')
+plt.plot(epochs_range, val_acc, label='Val Accuracy')
+plt.legend(loc='lower right')
+plt.title('Précision (MobileNet)')
+
+plt.subplot(1, 2, 2)
+plt.plot(epochs_range, loss, label='Train Loss')
+plt.plot(epochs_range, val_loss, label='Val Loss')
+plt.legend(loc='upper right')
+plt.title('Perte / Loss (MobileNet)')
+plt.show()
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
+
+# --- B. Matrice de Confusion ---
+print("\nCalcul de la Matrice de Confusion...")
+predictions = model.predict(test_generator)
+predicted_classes = (predictions > 0.5).astype("int32")
+true_classes = test_generator.classes
+class_labels = list(test_generator.class_indices.keys())
+
+cm = confusion_matrix(true_classes, predicted_classes)
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', xticklabels=class_labels, yticklabels=class_labels)
+plt.title('Matrice de Confusion MobileNet')
+plt.ylabel('Réalité')
+plt.xlabel('Prédiction IA')
+plt.show()
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.preprocessing import image
+import random
+import os
+
+# --- C. Test Visuel sur 5 images aléatoires ---
+print("\nTest Visuel sur 5 images...")
+class_names = ['no tumor', 'tumor']
+plt.figure(figsize=(20, 5))
+
+for i in range(5):
+    # Choix aléatoire
+    true_label = random.choice(class_names)
+    folder_path = os.path.join(test_dir, true_label)
+    try:
+        random_filename = random.choice(os.listdir(folder_path))
+    except: continue
+
+    img_path = os.path.join(folder_path, random_filename)
+
+    # Préparation
+    img = image.load_img(img_path, target_size=(IMG_WIDTH, IMG_HEIGHT)) # 224x224 !
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0
+
+    # Prédiction
+    score = model.predict(img_array, verbose=0)[0][0]
+    pred_label = 'tumor' if score > 0.5 else 'no tumor'
+    prob = score if score > 0.5 else 1 - score
+
+    # Affichage
+    ax = plt.subplot(1, 5, i + 1)
+    plt.imshow(img)
+    plt.axis('off')
+    color = 'green' if true_label == pred_label else 'red'
+    plt.title(f"Vrai: {true_label}\nIA: {pred_label}\n({prob*100:.1f}%)", color=color, fontweight='bold')
+
+plt.tight_layout()
+plt.show()
