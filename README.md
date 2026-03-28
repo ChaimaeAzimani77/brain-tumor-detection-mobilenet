@@ -37,7 +37,7 @@ avec de **meilleures performances** et des **résultats plus stables**.
 ### Exemples d'images IRM (avec Data Augmentation)
 
 <p align="center">
-  <img src="Images/1.jpg" width="850"/>
+  <img src="Images/1.png" width="850"/>
 </p>
 
 ## 🛠️ Partie Matérielle — Paramètres du Modèle
