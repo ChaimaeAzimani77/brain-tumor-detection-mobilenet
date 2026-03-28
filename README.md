@@ -69,7 +69,7 @@ avec de **meilleures performances** et des **résultats plus stables**.
 ## ⚙️ Architecture MobileNetV2 — Transfer Learning
 
 <p align="center">
-  <img src="Images/2.jpg" width="900"/>
+  <img src="Images/2.png" width="900"/>
 </p>
 
 ```python
@@ -112,7 +112,7 @@ ImageDataGenerator(
 ### Logs d'entraînement (10 epochs)
 
 <p align="center">
-  <img src="Images/3.jpg" width="750"/>
+  <img src="Images/3.png" width="750"/>
 </p>
 
 ## 📊 Résultats
@@ -120,7 +120,7 @@ ImageDataGenerator(
 ### Courbes Accuracy & Loss
 
 <p align="center">
-  <img src="Images/4.jpg" width="750"/>
+  <img src="Images/4.png" width="750"/>
 </p>
 
 > 📌 Les courbes MobileNet sont **beaucoup plus stables** que le CNN standard.  
@@ -137,7 +137,7 @@ ImageDataGenerator(
 ### Matrice de Confusion
 
 <p align="center">
-  <img src="Images/5.jpg" width="600"/>
+  <img src="Images/5.png" width="600"/>
 </p>
 
 | | Prédit : No Tumor | Prédit : Tumor |
